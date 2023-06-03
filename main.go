@@ -3,20 +3,25 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"log"
+	"os"
+	"strings"
+
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/jessevdk/go-flags"
 	"github.com/shurcooL/githubv4"
 	"golang.org/x/oauth2"
-	"log"
-	"os"
 )
 
+type Opts struct {
+	Repository string `short:"r" long:"repository" description:"the repository to push commits to" required:"true"`
+	BranchName string `short:"b" long:"branch" description:"the branch to push commits to" required:"true"`
+	Message    string `short:"m" long:"message" description:"the commit message to use" default:"updated with github-signer"`
+}
+
 func main() {
-	var opts struct {
-		Repository string `short:"r" long:"repository" description:"the repository to push commits to" required:"true"`
-		BranchName string `short:"b" long:"branch" description:"the branch to push commits to" required:"true"`
-		Message    string `short:"m" long:"message" description:"the commit message to use" default:"updated with github-signer"`
-	}
+	var opts Opts
 	_, err := flags.Parse(&opts)
 	switch e := err.(type) {
 	case *flags.Error:
@@ -31,25 +36,47 @@ func main() {
 		log.Fatal(err)
 	}
 
-	r, err := git.PlainOpen(".")
+	repo, err := git.PlainOpen(".")
 	if err != nil {
 		log.Fatalf("unable to open repository: %s", err)
 	}
-
-	w, err := r.Worktree()
+	worktree, err := repo.Worktree()
 	if err != nil {
 		log.Fatalf("unable to open repository: %s", err)
 	}
-	rev, err := r.Head()
+	revision, err := repo.Head()
 	if err != nil {
 		log.Fatalf("unable to find HEAD revision: %s", err)
 	}
-	s, err := w.Status()
+	status, err := worktree.Status()
 	if err != nil {
 		log.Fatalf("unable to open repository: %s", err)
 	}
+	changes := AddChanges(status)
+
+	client := createGhClient()
+
+	branchExists, err := CheckBranchExists(client, opts)
+	if err != nil {
+		log.Fatalf("unable to lookup branch: %s", err)
+	}
+
+	if !branchExists {
+		err = CreateBranch(client, opts)
+		if err != nil {
+			log.Fatalf("unable to create branch: %s", err)
+		}
+	}
+
+	err = DoCommit(client, changes, opts, revision)
+	if err != nil {
+		log.Fatalf("unable to mutate: %s", err)
+	}
+}
+
+func AddChanges(status git.Status) *[]githubv4.FileAddition {
 	changes := &[]githubv4.FileAddition{}
-	for name, status := range s {
+	for name, status := range status {
 		if status.Worktree == git.Modified || status.Staging == git.Added || status.Staging == git.Modified {
 			log.Printf("adding %s", name)
 			b, _ := os.ReadFile(name)
@@ -64,14 +91,21 @@ func main() {
 		log.Printf("no changes to commit, exiting")
 		os.Exit(0)
 	}
+	return changes
+}
+
+func createGhClient() *githubv4.Client {
 	src := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: os.Getenv("GITHUB_TOKEN")},
 	)
 	httpClient := oauth2.NewClient(context.Background(), src)
 
 	client := githubv4.NewClient(httpClient)
+	return client
+}
 
-	var m struct {
+func DoCommit(client *githubv4.Client, changes *[]githubv4.FileAddition, opts Opts, revision *plumbing.Reference) error {
+	var mutation struct {
 		CreateCommitOnBranch struct {
 			Commit struct {
 				Url githubv4.ID
@@ -87,12 +121,90 @@ func main() {
 		FileChanges: &githubv4.FileChanges{
 			Additions: changes,
 		},
-		ExpectedHeadOid: githubv4.GitObjectID(rev.Hash().String()),
+		ExpectedHeadOid: githubv4.GitObjectID(revision.Hash().String()),
 	}
 
-	err = client.Mutate(context.Background(), &m, input, nil)
+	err := client.Mutate(context.Background(), &mutation, input, nil)
 	if err != nil {
-		log.Fatalf("unable to mutate: %s", err)
+		return err
 	}
-	log.Printf("mutation complete: %s", m.CreateCommitOnBranch.Commit.Url)
+	log.Printf("mutation complete: %s", mutation.CreateCommitOnBranch.Commit.Url)
+	return nil
+}
+
+func CheckBranchExists(client *githubv4.Client, opts Opts) (bool, error) {
+	var query struct {
+		Repository struct {
+			Ref struct {
+				Name string
+			} `graphql:"ref(qualifiedName: $branchName)"`
+		} `graphql:"repository(owner: $owner, name: $name)"`
+	}
+	variables := map[string]interface{}{
+		"owner":      githubv4.String(strings.Split(opts.Repository, "/")[0]),
+		"name":       githubv4.String(strings.Split(opts.Repository, "/")[1]),
+		"branchName": githubv4.String("refs/heads/" + opts.BranchName),
+	}
+
+	err := client.Query(context.Background(), &query, variables)
+	if err != nil {
+		return false, err
+	}
+
+	if query.Repository.Ref.Name != "" {
+		log.Printf("branch found: %s", query.Repository.Ref.Name)
+		return true, nil
+	} else {
+		log.Printf("a branch with the name %s was not found", opts.BranchName)
+		return false, nil
+	}
+}
+
+func getMainOID(client *githubv4.Client, opts Opts) (githubv4.GitObjectID, githubv4.ID, error) {
+	var query struct {
+		Repository struct {
+			ID  githubv4.ID
+			Ref struct {
+				Target struct {
+					Oid githubv4.GitObjectID
+				}
+			} `graphql:"ref(qualifiedName: \"refs/heads/main\")"`
+		} `graphql:"repository(owner: $owner, name: $name)"`
+	}
+	variables := map[string]interface{}{
+		"owner": githubv4.String(strings.Split(opts.Repository, "/")[0]),
+		"name":  githubv4.String(strings.Split(opts.Repository, "/")[1]),
+	}
+
+	err := client.Query(context.Background(), &query, variables)
+	if err != nil {
+		return "", "", err
+	}
+	return query.Repository.Ref.Target.Oid, query.Repository.ID, nil
+}
+
+func CreateBranch(client *githubv4.Client, opts Opts) error {
+
+	oid, repoId, err := getMainOID(client, opts)
+	if err != nil {
+		return err
+	}
+
+	var mutation struct {
+		CreateRef struct {
+			ClientMutationID githubv4.String
+		} `graphql:"createRef(input: $input)"`
+	}
+	input := githubv4.CreateRefInput{
+		RepositoryID: repoId,
+		Name:         githubv4.String("refs/heads/" + opts.BranchName),
+		Oid:          oid,
+	}
+
+	err = client.Mutate(context.Background(), &mutation, input, nil)
+	if err != nil {
+		return err
+	}
+	log.Printf("%s branch created\n", opts.BranchName)
+	return nil
 }

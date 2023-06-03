@@ -6,7 +6,7 @@ It uses the `GITHUB_TOKEN` environment variable with an action to authenticate.
 ## Installation
 
 ```
-go install github.com/iwarapter/github-commiter@latest
+go install github.com/Harry-Moore-dev/github-commiter@latest
 ```
 
 ## Usage
@@ -17,7 +17,7 @@ github-committer [OPTIONS]
 
 Application Options:
 -r, --repository= the repository to push commits to
--b, --branch=     the branch to push commits to
+-b, --branch=     the branch to push commits to (creates new branch if named branch doesn't exist)
 -m, --message=    the commit message to use (default: updated with github-signer)
 
 Help Options:
