@@ -19,7 +19,7 @@ Application Options:
 -r, --repository= the repository to push commits to
 -b, --branch=     the branch to push commits to (creates new branch if named branch doesn't exist)
 -m, --message=    the commit message to use (default: updated with github-signer)
--p, --prmake=     automatically raises a pull request if set" (default: false)
+-p, --prmake=     automatically raises a pull request if set (default: false)
 
 Help Options:
 -h, --help        Show this help message
