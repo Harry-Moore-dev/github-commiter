@@ -18,14 +18,15 @@ type Opts struct {
 	Repository  string `short:"r" long:"repository" description:"the repository to push commits to" required:"true"`
 	BranchName  string `short:"b" long:"branch" description:"the branch to push commits to" required:"true"`
 	Message     string `short:"m" long:"message" description:"the commit message to use" default:"updated with github-signer"`
-	PullRequest bool   `short:"p" long:"prmake" description:"automatically raises a pull request if set" default:"false"`
+	PullRequest bool   `short:"p" long:"prmake" description:"automatically raises a pull request if set"`
 }
 
 func main() {
 	ctx := context.Background()
 
 	var opts Opts
-	_, err := flags.Parse(&opts)
+	parser := flags.NewParser(&opts, flags.Default)
+	_, err := parser.Parse()
 	switch e := err.(type) {
 	case *flags.Error:
 		if e.Type == flags.ErrHelp {
@@ -59,7 +60,7 @@ func main() {
 
 	client := createGhClient()
 
-	oid, repoId, err := getMainOID(ctx, client, opts)
+	oid, repoId, err := getMainOid(ctx, client, opts)
 	if err != nil {
 		log.Fatalf("unable to lookup oid: %s", err)
 	}
@@ -175,7 +176,7 @@ func CheckBranchExists(ctx context.Context, client *githubv4.Client, opts Opts) 
 	}
 }
 
-func getMainOID(ctx context.Context, client *githubv4.Client, opts Opts) (githubv4.GitObjectID, githubv4.ID, error) {
+func getMainOid(ctx context.Context, client *githubv4.Client, opts Opts) (githubv4.GitObjectID, githubv4.ID, error) {
 	var query struct {
 		Repository struct {
 			ID  githubv4.ID
