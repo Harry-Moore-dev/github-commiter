@@ -18,7 +18,7 @@ type Opts struct {
 	Repository  string `short:"r" long:"repository" description:"the repository to push commits to" required:"true"`
 	BranchName  string `short:"b" long:"branch" description:"the branch to push commits to" required:"true"`
 	Message     string `short:"m" long:"message" description:"the commit message to use" default:"updated with github-signer"`
-	PullRequest bool   `short:"p" long:"prmake" description:"automatically raises a pull request if set" default:"false"`
+	PullRequest string `short:"p" long:"prmake" description:"automatically raises a pull request if set" default:"false"`
 }
 
 func main() {
@@ -81,7 +81,7 @@ func main() {
 		log.Fatalf("unable to commit: %s", err)
 	}
 
-	if opts.PullRequest {
+	if opts.PullRequest == "true" {
 		CreatePullRequest(ctx, client, opts, repoId)
 		if err != nil {
 			log.Fatalf("unable to create PR: %s", err)
