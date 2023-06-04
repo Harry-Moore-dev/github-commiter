@@ -28,5 +28,5 @@ Help Options:
 ## Example
 
 ```
-github-commiter -r Harry-Moore-dev/github-committer -b branchname -m 'example commit' -p
+github-committer -r Harry-Moore-dev/github-committer -b branchname -m 'example commit' -p
 ```
