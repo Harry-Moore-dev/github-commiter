@@ -6,7 +6,7 @@ It uses the `GITHUB_TOKEN` environment variable with an action to authenticate.
 ## Installation
 
 ```
-go install github.com/iwarapter/github-commiter@latest
+go install github.com/Harry-Moore-dev/github-committer@latest
 ```
 
 ## Usage
@@ -17,8 +17,9 @@ github-committer [OPTIONS]
 
 Application Options:
 -r, --repository= the repository to push commits to
--b, --branch=     the branch to push commits to
+-b, --branch=     the branch to push commits to (creates new branch if named branch doesn't exist)
 -m, --message=    the commit message to use (default: updated with github-signer)
+-p, --prmake=     automatically raises a pull request if set (default: false)
 
 Help Options:
 -h, --help        Show this help message
@@ -27,5 +28,5 @@ Help Options:
 ## Example
 
 ```
-github-committer -r iwarapter/example -b main -m 'example commit message'
+github-committer -r Harry-Moore-dev/github-committer -b branchname -m 'example commit' -p
 ```

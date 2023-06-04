@@ -1,6 +1,6 @@
-module github.com/iwarapter/github-commiter
+module github.com/Harry-Moore-dev/github-committer
 
-go 1.19
+go 1.20
 
 require (
 	github.com/go-git/go-git/v5 v5.5.2
