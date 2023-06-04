@@ -15,12 +15,15 @@ import (
 )
 
 type Opts struct {
-	Repository string `short:"r" long:"repository" description:"the repository to push commits to" required:"true"`
-	BranchName string `short:"b" long:"branch" description:"the branch to push commits to" required:"true"`
-	Message    string `short:"m" long:"message" description:"the commit message to use" default:"updated with github-signer"`
+	Repository  string `short:"r" long:"repository" description:"the repository to push commits to" required:"true"`
+	BranchName  string `short:"b" long:"branch" description:"the branch to push commits to" required:"true"`
+	Message     string `short:"m" long:"message" description:"the commit message to use" default:"updated with github-signer"`
+	PullRequest bool   `short:"p" long:"prmake" description:"automatically raises a pull request if set" default:"false"`
 }
 
 func main() {
+	ctx := context.Background()
+
 	var opts Opts
 	_, err := flags.Parse(&opts)
 	switch e := err.(type) {
@@ -56,28 +59,40 @@ func main() {
 
 	client := createGhClient()
 
-	branchExists, err := CheckBranchExists(client, opts)
+	oid, repoId, err := getMainOID(ctx, client, opts)
+	if err != nil {
+		log.Fatalf("unable to lookup oid: %s", err)
+	}
+
+	branchExists, err := CheckBranchExists(ctx, client, opts)
 	if err != nil {
 		log.Fatalf("unable to lookup branch: %s", err)
 	}
 
 	if !branchExists {
-		err = CreateBranch(client, opts)
+		err = CreateBranch(ctx, client, opts, repoId, oid)
 		if err != nil {
 			log.Fatalf("unable to create branch: %s", err)
 		}
 	}
 
-	err = DoCommit(client, changes, opts, revision)
+	err = DoCommit(ctx, client, changes, opts, revision)
 	if err != nil {
-		log.Fatalf("unable to mutate: %s", err)
+		log.Fatalf("unable to commit: %s", err)
+	}
+
+	if opts.PullRequest {
+		CreatePullRequest(ctx, client, opts, repoId)
+		if err != nil {
+			log.Fatalf("unable to create PR: %s", err)
+		}
 	}
 }
 
 func AddChanges(status git.Status) *[]githubv4.FileAddition {
 	changes := &[]githubv4.FileAddition{}
 	for name, status := range status {
-		if status.Worktree == git.Modified || status.Staging == git.Added || status.Staging == git.Modified {
+		if status.Worktree == git.Modified || status.Staging == git.Added || status.Staging == git.Modified || status.Staging == git.Untracked {
 			log.Printf("adding %s", name)
 			b, _ := os.ReadFile(name)
 			content := base64.StdEncoding.EncodeToString(b)
@@ -104,7 +119,7 @@ func createGhClient() *githubv4.Client {
 	return client
 }
 
-func DoCommit(client *githubv4.Client, changes *[]githubv4.FileAddition, opts Opts, revision *plumbing.Reference) error {
+func DoCommit(ctx context.Context, client *githubv4.Client, changes *[]githubv4.FileAddition, opts Opts, revision *plumbing.Reference) error {
 	var mutation struct {
 		CreateCommitOnBranch struct {
 			Commit struct {
@@ -124,7 +139,7 @@ func DoCommit(client *githubv4.Client, changes *[]githubv4.FileAddition, opts Op
 		ExpectedHeadOid: githubv4.GitObjectID(revision.Hash().String()),
 	}
 
-	err := client.Mutate(context.Background(), &mutation, input, nil)
+	err := client.Mutate(ctx, &mutation, input, nil)
 	if err != nil {
 		return err
 	}
@@ -132,7 +147,7 @@ func DoCommit(client *githubv4.Client, changes *[]githubv4.FileAddition, opts Op
 	return nil
 }
 
-func CheckBranchExists(client *githubv4.Client, opts Opts) (bool, error) {
+func CheckBranchExists(ctx context.Context, client *githubv4.Client, opts Opts) (bool, error) {
 	var query struct {
 		Repository struct {
 			Ref struct {
@@ -146,7 +161,7 @@ func CheckBranchExists(client *githubv4.Client, opts Opts) (bool, error) {
 		"branchName": githubv4.String("refs/heads/" + opts.BranchName),
 	}
 
-	err := client.Query(context.Background(), &query, variables)
+	err := client.Query(ctx, &query, variables)
 	if err != nil {
 		return false, err
 	}
@@ -160,7 +175,7 @@ func CheckBranchExists(client *githubv4.Client, opts Opts) (bool, error) {
 	}
 }
 
-func getMainOID(client *githubv4.Client, opts Opts) (githubv4.GitObjectID, githubv4.ID, error) {
+func getMainOID(ctx context.Context, client *githubv4.Client, opts Opts) (githubv4.GitObjectID, githubv4.ID, error) {
 	var query struct {
 		Repository struct {
 			ID  githubv4.ID
@@ -176,20 +191,14 @@ func getMainOID(client *githubv4.Client, opts Opts) (githubv4.GitObjectID, githu
 		"name":  githubv4.String(strings.Split(opts.Repository, "/")[1]),
 	}
 
-	err := client.Query(context.Background(), &query, variables)
+	err := client.Query(ctx, &query, variables)
 	if err != nil {
 		return "", "", err
 	}
 	return query.Repository.Ref.Target.Oid, query.Repository.ID, nil
 }
 
-func CreateBranch(client *githubv4.Client, opts Opts) error {
-
-	oid, repoId, err := getMainOID(client, opts)
-	if err != nil {
-		return err
-	}
-
+func CreateBranch(ctx context.Context, client *githubv4.Client, opts Opts, repoId githubv4.ID, oid githubv4.GitObjectID) error {
 	var mutation struct {
 		CreateRef struct {
 			ClientMutationID githubv4.String
@@ -201,10 +210,33 @@ func CreateBranch(client *githubv4.Client, opts Opts) error {
 		Oid:          oid,
 	}
 
-	err = client.Mutate(context.Background(), &mutation, input, nil)
+	err := client.Mutate(ctx, &mutation, input, nil)
 	if err != nil {
 		return err
 	}
 	log.Printf("%s branch created\n", opts.BranchName)
+	return nil
+}
+
+func CreatePullRequest(ctx context.Context, client *githubv4.Client, opts Opts, repoId githubv4.ID) error {
+	var mutation struct {
+		CreatePullRequest struct {
+			PullRequest struct {
+				ID githubv4.ID
+			}
+		} `graphql:"createPullRequest(input: $input)"`
+	}
+	input := githubv4.CreatePullRequestInput{
+		RepositoryID: repoId,
+		BaseRefName:  "main",
+		HeadRefName:  githubv4.String(opts.BranchName),
+		Title:        githubv4.String(opts.Message),
+	}
+
+	err := client.Mutate(ctx, &mutation, input, nil)
+	if err != nil {
+		return err
+	}
+	log.Printf("pull request created %s\n", opts.BranchName)
 	return nil
 }
