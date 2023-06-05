@@ -93,7 +93,7 @@ func main() {
 func AddChanges(status git.Status) *[]githubv4.FileAddition {
 	changes := &[]githubv4.FileAddition{}
 	for name, status := range status {
-		if status.Worktree == git.Modified || status.Staging == git.Added || status.Staging == git.Modified || status.Staging == git.Untracked {
+		if status.Worktree == git.Modified || status.Staging == git.Added || status.Staging == git.Modified {
 			log.Printf("adding %s", name)
 			b, _ := os.ReadFile(name)
 			content := base64.StdEncoding.EncodeToString(b)
