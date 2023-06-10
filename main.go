@@ -43,10 +43,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("unable to open repository: %s", err)
 	}
-	err = fetchRemote(repo)
-	if err != nil {
-		log.Fatalf("unable to fetch remote: %s", err)
-	}
 	changes := addChanges(status)
 
 	client := createGhClient()
@@ -72,6 +68,10 @@ func main() {
 			log.Fatalf("unable to find HEAD revision: %s", err)
 		}
 	} else {
+		err = fetchRemote(repo)
+		if err != nil {
+			log.Fatalf("unable to fetch remote: %s", err)
+		}
 		refName := plumbing.ReferenceName("refs/remotes/origin/" + opts.BranchName)
 		revision, err = repo.Reference(refName, true)
 		if err != nil {
