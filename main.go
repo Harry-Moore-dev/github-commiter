@@ -44,6 +44,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("unable to open repository: %s", err)
 	}
+	remote, err := repo.Remote("origin")
+	if err != nil {
+		log.Fatalf("unable to fetch remote: %s", err)
+	}
+	err = remote.Fetch(&git.FetchOptions{})
+	if err != nil {
+		log.Fatalf("unable to fetch remote: %s", err)
+	}
 	worktree, err := repo.Worktree()
 	if err != nil {
 		log.Fatalf("unable to open repository: %s", err)
