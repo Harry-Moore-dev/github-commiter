@@ -48,10 +48,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("unable to open repository: %s", err)
 	}
-	revision, err := repo.Head()
-	if err != nil {
-		log.Fatalf("unable to find HEAD revision: %s", err)
-	}
 	status, err := worktree.Status()
 	if err != nil {
 		log.Fatalf("unable to open repository: %s", err)
@@ -70,10 +66,21 @@ func main() {
 		log.Fatalf("unable to lookup branch: %s", err)
 	}
 
+	var revision *plumbing.Reference
 	if !branchExists {
 		err = CreateBranch(ctx, client, opts, repoId, oid)
 		if err != nil {
 			log.Fatalf("unable to create branch: %s", err)
+		}
+		revision, err = repo.Reference("refs/head/main", true)
+		if err != nil {
+			log.Fatalf("unable to find HEAD for branch main: %s", err)
+		}
+	} else {
+		refName := plumbing.ReferenceName("refs/remotes/origin/" + opts.BranchName)
+		revision, err = repo.Reference(refName, true)
+		if err != nil {
+			log.Fatalf("unable to find HEAD for branch %s: %s", opts.BranchName, err)
 		}
 	}
 
