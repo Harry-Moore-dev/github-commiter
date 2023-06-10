@@ -30,3 +30,4 @@ Help Options:
 ```
 github-committer -r Harry-Moore-dev/github-committer -b branchname -m 'example commit' -p
 ```
+0
