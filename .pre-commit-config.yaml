@@ -1,0 +1,23 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.1.0 # Use the ref you want to point at
+    hooks:
+      - id: trailing-whitespace
+        exclude: "^vendor/.*$"
+      - id: end-of-file-fixer
+        exclude: "^vendor/.*$"
+      - id: check-added-large-files
+        exclude: "^vendor/.*$"
+      - id: check-yaml
+        exclude: "^vendor/.*$"
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.4.0
+    hooks:
+      - id: go-fmt
+        exclude: "^vendor/.*$"
+      - id: go-vet
+        exclude: "^vendor/.*$"
+      - id: go-imports
+        exclude: "^vendor/.*$"
+      - id: go-mod-tidy
+        files: ".*"
