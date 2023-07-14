@@ -85,7 +85,7 @@ func main() {
 	}
 
 	if opts.PullRequest {
-		CreatePullRequest(ctx, client, opts, repoId)
+		err = CreatePullRequest(ctx, client, opts, repoId)
 		if err != nil {
 			log.Fatalf("unable to create PR: %s", err)
 		}

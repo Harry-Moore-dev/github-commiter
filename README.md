@@ -1,7 +1,7 @@
 # GitHub Committer
 
 This is a simple utility which creates a __signed__ commit using the GitHub graphql API.
-It uses the `GITHUB_TOKEN` environment variable with an action to authenticate. 
+It uses the `GITHUB_TOKEN` environment variable with an action to authenticate.
 
 ## Installation
 
