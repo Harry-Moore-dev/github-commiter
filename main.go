@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/jessevdk/go-flags"
 	"github.com/shurcooL/githubv4"
 	"golang.org/x/oauth2"
@@ -113,7 +114,10 @@ func fetchRemote(repo *git.Repository) error {
 	if err != nil {
 		return err
 	}
-	err = remote.Fetch(&git.FetchOptions{})
+	tokenAuth := &http.TokenAuth{
+		Token: os.Getenv("GITHUB_TOKEN"),
+	}
+	err = remote.Fetch(&git.FetchOptions{Auth: tokenAuth})
 	if err != nil {
 		return err
 	}
